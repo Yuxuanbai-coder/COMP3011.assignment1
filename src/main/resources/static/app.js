@@ -4,6 +4,7 @@ const statusText = document.querySelector('#status');
 const formatText = document.querySelector('#format');
 const sizeText = document.querySelector('#size');
 const audioPreview = document.querySelector('#audioPreview');
+const transcriptionText = document.querySelector('#transcription');
 
 let mediaRecorder;
 let audioChunks = [];
@@ -18,6 +19,38 @@ function setStatus(message, isError = false) {
 function chooseMimeType() {
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
     return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+async function uploadAudio(blob) {
+    const formData = new FormData();
+    const filename = blob.type.includes('mp4') ? 'recording.mp4' : 'recording.webm';
+    formData.append('file', blob, filename);
+
+    setStatus('Recording stopped. Transcribing...');
+    transcriptionText.textContent = 'Waiting for transcription...';
+
+    const response = await fetch('/api/v1/transcriptions', {
+        method: 'POST',
+        body: formData
+    });
+
+    let responseBody;
+    try {
+        responseBody = await response.json();
+    } catch (error) {
+        throw new Error(`The server returned an invalid response (${response.status}).`);
+    }
+
+    if (!response.ok) {
+        throw new Error(responseBody.message || `Transcription failed (${response.status}).`);
+    }
+
+    if (typeof responseBody.text !== 'string') {
+        throw new Error('The server response did not contain transcription text.');
+    }
+
+    transcriptionText.textContent = responseBody.text || '(No speech detected.)';
+    setStatus('Transcription complete. Ready to record again.');
 }
 
 startButton.addEventListener('click', async () => {
@@ -44,13 +77,23 @@ startButton.addEventListener('click', async () => {
             audioPreview.hidden = false;
             formatText.textContent = audioBlob.type || 'audio/webm';
             sizeText.textContent = `${(audioBlob.size / 1024).toFixed(1)} KB`;
-            setStatus('Recording stopped. Audio Blob is ready.');
             stream.getTracks().forEach((track) => track.stop());
+
+            uploadAudio(audioBlob)
+                .catch((error) => {
+                    transcriptionText.textContent = 'Transcription failed.';
+                    setStatus(error.message, true);
+                })
+                .finally(() => {
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                });
         });
 
         mediaRecorder.start();
         startButton.disabled = true;
         stopButton.disabled = false;
+        transcriptionText.textContent = 'No transcription yet.';
         formatText.textContent = mediaRecorder.mimeType || 'browser default';
         sizeText.textContent = '-';
         setStatus('Recording...');
@@ -62,7 +105,7 @@ startButton.addEventListener('click', async () => {
 stopButton.addEventListener('click', () => {
     if (mediaRecorder?.state === 'recording') {
         mediaRecorder.stop();
-        startButton.disabled = false;
+        startButton.disabled = true;
         stopButton.disabled = true;
     }
 });
