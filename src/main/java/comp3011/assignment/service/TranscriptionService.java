@@ -25,11 +25,11 @@ public class TranscriptionService {
     private final String transcriptionModel;
 
     public TranscriptionService(
-            RestClient.Builder restClientBuilder,
+            RestClient transcriptionRestClient,
             @Value("${OPENAI_API_KEY:}") String apiKey,
             @Value("${openai.transcription-url}") String transcriptionUrl,
             @Value("${openai.transcription-model}") String transcriptionModel) {
-        this.restClient = restClientBuilder.build();
+        this.restClient = transcriptionRestClient;
         this.apiKey = apiKey;
         this.transcriptionUrl = transcriptionUrl;
         this.transcriptionModel = transcriptionModel;
