@@ -2,6 +2,7 @@ package comp3011.assignment.service;
 
 import java.io.IOException;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
@@ -20,16 +21,19 @@ import org.springframework.web.multipart.MultipartFile;
 public class TranscriptionService {
 
     private final RestClient restClient;
+    private final GlobalStatistics globalStatistics;
     private final String apiKey;
     private final String transcriptionUrl;
     private final String transcriptionModel;
 
     public TranscriptionService(
             RestClient transcriptionRestClient,
+            GlobalStatistics globalStatistics,
             @Value("${OPENAI_API_KEY:}") String apiKey,
             @Value("${openai.transcription-url}") String transcriptionUrl,
             @Value("${openai.transcription-model}") String transcriptionModel) {
         this.restClient = transcriptionRestClient;
+        this.globalStatistics = globalStatistics;
         this.apiKey = apiKey;
         this.transcriptionUrl = transcriptionUrl;
         this.transcriptionModel = transcriptionModel;
@@ -60,6 +64,15 @@ public class TranscriptionService {
                 throw new TranscriptionServiceException(
                         "Speech-to-text service returned an empty response");
             }
+
+            if (response.usage() == null) {
+                throw new TranscriptionServiceException(
+                        "Speech-to-text service returned no token usage");
+            }
+
+            globalStatistics.addTokenUsage(
+                    response.usage().inputTokens(),
+                    response.usage().outputTokens());
 
             return response.text();
         } catch (TranscriptionServiceException exception) {
@@ -93,6 +106,13 @@ public class TranscriptionService {
     /**
      * Response shape returned by the OpenAI transcription endpoint.
      */
-    private record OpenAiTranscriptionResponse(String text) {
+    private record OpenAiTranscriptionResponse(
+            String text,
+            Usage usage) {
+    }
+
+    private record Usage(
+            @JsonProperty("input_tokens") long inputTokens,
+            @JsonProperty("output_tokens") long outputTokens) {
     }
 }
