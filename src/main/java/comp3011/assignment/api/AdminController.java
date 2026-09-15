@@ -13,7 +13,13 @@ import comp3011.assignment.service.GlobalStatistics;
 import comp3011.assignment.service.ShutdownCoordinator;
 
 /**
- * Administrative and global statistics endpoints from assignment1api.yaml.
+ * Exposes the administrative and global statistics endpoints required by the
+ * assignment API specification.
+ *
+ * <p>This controller does not contain the implementation of statistics or
+ * shutdown behaviour itself. It delegates those responsibilities to
+ * {@link GlobalStatistics} and {@link ShutdownCoordinator}, keeping the HTTP
+ * layer focused on mapping requests to responses and status codes.</p>
  */
 @RestController
 public class AdminController {
@@ -29,6 +35,12 @@ public class AdminController {
         this.shutdownCoordinator = shutdownCoordinator;
     }
 
+    /**
+     * Returns the UTC server start time, the current UTC time, and the elapsed
+     * uptime in seconds.
+     *
+     * @return a response object that is automatically serialised as JSON
+     */
     @GetMapping("/api/v1/admin/uptime")
     public UptimeResponse getServerUptime() {
         Instant utcNow = Instant.now();
@@ -36,6 +48,15 @@ public class AdminController {
         return new UptimeResponse(utcServerStart, utcNow, Math.max(0.0, uptimeSeconds));
     }
 
+    /**
+     * Requests a graceful server shutdown.
+     *
+     * <p>The coordinator accepts the first request and rejects later requests
+     * while shutdown is already in progress. This method therefore returns
+     * HTTP 202 for an accepted request and HTTP 409 for a duplicate request.</p>
+     *
+     * @return the HTTP response describing whether shutdown was accepted
+     */
     @PostMapping(SHUTDOWN_PATH)
     public ResponseEntity<?> shutdownServer() {
         if (shutdownCoordinator.requestShutdown()) {
@@ -52,6 +73,11 @@ public class AdminController {
                         SHUTDOWN_PATH));
     }
 
+    /**
+     * Returns the process-wide token counters collected since server startup.
+     *
+     * @return the current cumulative input and output token totals
+     */
     @GetMapping("/api/v1/global/stats")
     public GlobalStatsResponse getGlobalStats() {
         return globalStatistics.snapshot();

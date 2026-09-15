@@ -1,6 +1,7 @@
 package comp3011.assignment.service;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +16,12 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Sends uploaded audio to the OpenAI transcription endpoint.
+ * Implements the speech-to-text business workflow.
+ *
+ * <p>The service validates the uploaded file, builds the multipart request for
+ * OpenAI, converts the response into Java data, and records token usage. The
+ * API key is read from the runtime environment through Spring configuration;
+ * it is never sent to the browser or written to logs.</p>
  */
 @Service
 public class TranscriptionService {
@@ -39,10 +45,30 @@ public class TranscriptionService {
         this.transcriptionModel = transcriptionModel;
     }
 
+    /**
+     * Sends one uploaded audio file to the configured Cloud transcription API.
+     *
+     * @param audioFile the browser-uploaded audio file
+     * @return the transcription text returned by the Cloud service
+     * @throws IllegalArgumentException if the file is empty or explicitly has
+     *         a non-audio content type
+     * @throws IllegalStateException if the runtime API key is not configured
+     * @throws TranscriptionServiceException if the upstream call, response, or
+     *         uploaded file cannot be processed
+     */
     public String transcribe(MultipartFile audioFile) {
         if (audioFile == null || audioFile.isEmpty()) {
             throw new IllegalArgumentException("An audio file is required");
         }
+
+        String contentType = audioFile.getContentType();
+        if (contentType != null
+                && !contentType.isBlank()
+                && !contentType.toLowerCase(Locale.ROOT).startsWith("audio/")) {
+            throw new IllegalArgumentException(
+                    "The uploaded file must be an audio file");
+        }
+
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("OPENAI_API_KEY is not configured");
         }
@@ -83,6 +109,17 @@ public class TranscriptionService {
         }
     }
 
+    /**
+     * Converts the multipart upload into a resource with a usable filename.
+     *
+     * <p>Keeping the original filename helps the upstream multipart parser
+     * identify the media type. A fallback filename is provided because some
+     * clients do not send one.</p>
+     *
+     * @param audioFile uploaded file to convert
+     * @return resource containing the uploaded bytes and filename
+     * @throws TranscriptionServiceException if the bytes cannot be read
+     */
     private ByteArrayResource asResource(MultipartFile audioFile) {
         try {
             String filename = audioFile.getOriginalFilename();
@@ -111,6 +148,9 @@ public class TranscriptionService {
             Usage usage) {
     }
 
+    /**
+     * Token usage values returned by the transcription API.
+     */
     private record Usage(
             @JsonProperty("input_tokens") long inputTokens,
             @JsonProperty("output_tokens") long outputTokens) {

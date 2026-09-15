@@ -14,14 +14,26 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import comp3011.assignment.service.TranscriptionServiceException;
 
 /**
- * Keeps unexpected API failures in the standard JSON shape without exposing
- * implementation details or credentials.
+ * Converts exceptions raised by controllers and services into the common JSON
+ * error format required by the API specification.
+ *
+ * <p>Centralising this mapping means individual controllers can focus on their
+ * successful responses. It also prevents internal exception messages and
+ * credentials from being returned to browser clients.</p>
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    /**
+     * Handles invalid client input, such as an empty or unsupported audio
+     * upload.
+     *
+     * @param exception the validation failure
+     * @param request the HTTP request that contained the invalid input
+     * @return a HTTP 400 response in the standard error format
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(
             IllegalArgumentException exception,
@@ -35,6 +47,17 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    /**
+     * Handles failures returned by the external speech-to-text service.
+     *
+     * <p>The detailed exception is logged for server-side diagnosis, while the
+     * client receives a generic message that does not reveal implementation
+     * details or the API key.</p>
+     *
+     * @param exception the wrapped upstream failure
+     * @param request the HTTP request that triggered the upstream call
+     * @return a HTTP 502 response in the standard error format
+     */
     @ExceptionHandler(TranscriptionServiceException.class)
     public ResponseEntity<ErrorResponse> handleTranscriptionException(
             TranscriptionServiceException exception,
@@ -50,6 +73,13 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
 
+    /**
+     * Provides a final safety net for exceptions not handled more specifically.
+     *
+     * @param exception the unexpected failure
+     * @param request the HTTP request being processed
+     * @return a HTTP 500 response without exposing the exception details
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(
             Exception exception,

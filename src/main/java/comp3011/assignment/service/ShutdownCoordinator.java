@@ -9,7 +9,12 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Service;
 
 /**
- * Ensures that only one graceful shutdown sequence can be requested.
+ * Coordinates the application's one-time graceful shutdown sequence.
+ *
+ * <p>An {@link AtomicBoolean} prevents two concurrent shutdown requests from
+ * starting two shutdown actions. The actual close operation runs on a
+ * separate virtual thread so the HTTP response can be sent before the Spring
+ * application context is closed.</p>
  */
 @Service
 public class ShutdownCoordinator {
@@ -19,6 +24,12 @@ public class ShutdownCoordinator {
     private final AtomicBoolean shutdownRequested = new AtomicBoolean();
     private final Runnable shutdownAction;
 
+    /**
+     * Creates the production coordinator using the Spring application context
+     * as the shutdown action.
+     *
+     * @param applicationContext context that will be closed during shutdown
+     */
     @Autowired
     public ShutdownCoordinator(ConfigurableApplicationContext applicationContext) {
         this(() -> applicationContext.close());
@@ -28,6 +39,12 @@ public class ShutdownCoordinator {
         this.shutdownAction = shutdownAction;
     }
 
+    /**
+     * Accepts the first shutdown request and rejects subsequent requests.
+     *
+     * @return {@code true} when this call started shutdown, otherwise
+     *         {@code false} when shutdown was already requested
+     */
     public boolean requestShutdown() {
         if (!shutdownRequested.compareAndSet(false, true)) {
             return false;

@@ -1,7 +1,13 @@
 package comp3011.assignment.api;
 
 /**
- * Global token counters since the current server process started.
+ * JSON response containing cumulative speech-to-text token usage.
+ *
+ * <p>The counters belong to the current Java process and therefore reset when
+ * the server restarts.</p>
+ *
+ * @param inputTokens total input tokens consumed since server startup
+ * @param outputTokens total output tokens produced since server startup
  */
 public record GlobalStatsResponse(long inputTokens, long outputTokens) {
 }
